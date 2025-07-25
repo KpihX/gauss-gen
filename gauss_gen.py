@@ -6,8 +6,9 @@ import scipy.stats as sps
 
 # %%
 def simulation_X(K, theta, n):
-    simul_Z = npr.choice(range(1, K+1), p=theta[0], size=n)
-    return [sps.multivariate_normal(theta[1][z-1], theta[2][z-1]).rvs() for z in simul_Z], simul_Z
+    """Simulate ``n`` observations from a ``K``-component Gaussian mixture."""
+    simul_Z = npr.choice(range(1, K + 1), p=theta[0], size=n)
+    return [sps.multivariate_normal(theta[1][z - 1], theta[2][z - 1]).rvs() for z in simul_Z], simul_Z
 
 
 # %%
@@ -15,13 +16,16 @@ def simulation_X(K, theta, n):
 #     # print("*", 1 / (np.sqrt(2 * np.pi * theta[2])))
 #     return np.sum(theta[0] * 1 / (np.sqrt(2 * np.pi * theta[2])) * np.exp(-1/2 * (x - theta[1]) ** 2 / theta[2]))
 
-def pdf_X(x, theta:tuple[np.ndarray]):
-    return theta[0].dot(np.array([sps.multivariate_normal(theta[1][k], theta[2][k]).pdf(x) for k in range(len(theta[0]))]))
+def pdf_X(x, theta: tuple[np.ndarray]):
+    """Probability density function of the mixture at point ``x``."""
+    return theta[0].dot(
+        np.array([sps.multivariate_normal(theta[1][k], theta[2][k]).pdf(x) for k in range(len(theta[0]))])
+    )
 
 # def pdf_X2(x, theta):
 #     d = x.shape[0]
 #     diff = x - theta[1]
-#     exp_fact = np.exp(-0.5 * np.array([d.T @ sigma @ d for d, sigma in zip(diff, np.linalg.inv(theta[2]))]))_çik;
+#     exp_fact = np.exp(-0.5 * np.array([d.T @ sigma @ d for d, sigma in zip(diff, np.linalg.inv(theta[2]))]))
 #     # print("**", x, "*", theta[1], "\n***", diff)
 #     # print("*", diff.T.shape)
 #     # print("*", np.linalg.inv(theta[2]).shape)
@@ -29,42 +33,25 @@ def pdf_X(x, theta:tuple[np.ndarray]):
 #     return np.sum(theta[0] * 1 / ((2 * np.pi) ** (d/2) * np.sqrt(np.linalg.det(theta[2]))) * exp_fact)
 
 # %%
-d = 1
-K = 5
-np.random.seed(0)
-Pi = np.random.dirichlet(np.ones(K))
-print("Pi:", Pi)
-Mu = np.random.randn(K, 1)
-print("Mu:", Mu)
-Sigma = np.array([np.random.uniform(0, abs(mu)**2, size=(1,1)) for mu in Mu])
-print("Sigma:", Sigma)
-theta = (Pi, Mu, Sigma)
-
-N = 1000
-b = int(N ** (1./3.)) * 7
-X_samples, Z_samples = simulation_X(K, theta, N)
-# print("X samples: ", X_samples)
-# print("Z samples: ", Z_samples)
-
-plt.hist(X_samples, density=True, label=f"Echantillon de X de taille {N}", bins=b)
-
-X = np.linspace(-7, 7, 1000).reshape(1000, 1)
-plt.plot(X, np.array([pdf_X(x, theta) for x in X]), label="Densité de probabilité de X")
 
 # %% [markdown]
 # ## 2 Algorithme d’estimation de paramètres de mélange gaussien
 
 # %%
 def likelihood(K, theta, X):
-    return np.log([pdf_X(x, theta) for x in X]).sum() 
+    """Return the log-likelihood of data ``X`` under parameters ``theta``."""
+    return np.log([pdf_X(x, theta) for x in X]).sum()
 
 # %%
 def pdf_Z_X(x, theta):
-    # print("theta: ", theta)
-    return theta[0] * np.array([sps.multivariate_normal(theta[1][k], theta[2][k]).pdf(x) for k in range(len(theta[0]))]) / pdf_X(x, theta)
+    """Posterior probabilities of latent classes given ``x`` and ``theta``."""
+    return theta[0] * np.array(
+        [sps.multivariate_normal(theta[1][k], theta[2][k]).pdf(x) for k in range(len(theta[0]))]
+    ) / pdf_X(x, theta)
 
 
-def theta_estim(X, K, n_iter = 100):
+def theta_estim(X, K, n_iter=100):
+    """Estimate mixture parameters using the EM algorithm."""
     n = len(X)
     Z = npr.choice(range(1, K+1), size=n)
 
@@ -109,77 +96,68 @@ def theta_estim(X, K, n_iter = 100):
 
 
 
-# %%
-from sklearn.datasets import make_blobs
-import matplotlib.pyplot as plt
+if __name__ == "__main__":
+    # Example 1: generate and plot a 1D Gaussian mixture
+    d = 1
+    K = 5
+    np.random.seed(0)
+    Pi = np.random.dirichlet(np.ones(K))
+    print("Pi:", Pi)
+    Mu = np.random.randn(K, 1)
+    print("Mu:", Mu)
+    Sigma = np.array([np.random.uniform(0, abs(mu) ** 2, size=(1, 1)) for mu in Mu])
+    print("Sigma:", Sigma)
+    theta = (Pi, Mu, Sigma)
 
-# Génération des données
-n = 300
-K = 3
-X, y = make_blobs(n_samples=n, centers=K, n_features=2, cluster_std=1.0, random_state=42)
+    N = 1000
+    b = int(N ** (1.0 / 3.0)) * 7
+    X_samples, Z_samples = simulation_X(K, theta, N)
+    plt.hist(X_samples, density=True, label=f"Echantillon de X de taille {N}", bins=b)
+    X = np.linspace(-7, 7, 1000).reshape(1000, 1)
+    plt.plot(X, np.array([pdf_X(x, theta) for x in X]), label="Densité de probabilité de X")
+    plt.legend()
+    plt.show()
 
-theta, Mu_hist = theta_estim(X, K, n_iter=15)
+    # Example 2: estimation with synthetic 2D data
+    from sklearn.datasets import make_blobs
 
-# Affichage des points
-plt.figure(figsize=(8, 6))
-plt.scatter(X[:, 0], X[:, 1], c=y, s=30)
-plt.title('Jeu de données simulé (3 composantes)')
-plt.xlabel('x1')
-plt.ylabel('x2')
-plt.show()
+    n = 300
+    K = 3
+    X, y = make_blobs(n_samples=n, centers=K, n_features=2, cluster_std=1.0, random_state=42)
 
-# Affichage de la trajectoire de chaque centre
-m = Mu_hist.shape[1]
-for k in range(m):
-    traj = Mu_hist[:, k, :]
-    plt.plot(traj[:, 0], traj[:, 1], marker='o', label=f'Centre {k+1}')
-    # Flèches entre les positions successives
-    for t in range(len(traj)-1):
-        plt.arrow(traj[t, 0], traj[t, 1],
-                  traj[t+1, 0] - traj[t, 0], traj[t+1, 1] - traj[t, 1],
-                  head_width=0.15, head_length=0.2, fc=f'C{k}', ec=f'C{k}', alpha=0.7, length_includes_head=True)
+    theta, Mu_hist = theta_estim(X, K, n_iter=15)
 
-plt.title("Trajectoire des centres au fil des itérations")
-plt.xlabel("x1")
-plt.ylabel("x2")
-plt.legend()
-plt.show()
+    plt.figure(figsize=(8, 6))
+    plt.scatter(X[:, 0], X[:, 1], c=y, s=30)
+    plt.title('Jeu de données simulé (3 composantes)')
+    plt.xlabel('x1')
+    plt.ylabel('x2')
+    plt.show()
 
-# %%
-import matplotlib.pyplot as plt
-import numpy as np
+    m = Mu_hist.shape[1]
+    for k in range(m):
+        traj = Mu_hist[:, k, :]
+        plt.plot(traj[:, 0], traj[:, 1], marker='o', label=f'Centre {k+1}')
+        for t in range(len(traj) - 1):
+            plt.arrow(
+                traj[t, 0],
+                traj[t, 1],
+                traj[t + 1, 0] - traj[t, 0],
+                traj[t + 1, 1] - traj[t, 1],
+                head_width=0.15,
+                head_length=0.2,
+                fc=f"C{k}",
+                ec=f"C{k}",
+                alpha=0.7,
+                length_includes_head=True,
+            )
 
-# Supposons que Mu_hist est une liste ou un tableau de forme (n_iter, K, 2)
-# contenant la position des centres à chaque itération
-# Exemple : Mu_hist = [Mu_t0, Mu_t1, ..., Mu_tn] où Mu_t.shape = (K, 2)
+    plt.title("Trajectoire des centres au fil des itérations")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    plt.legend()
+    plt.show()
 
-# À adapter selon votre code :
-# Mu_hist = ...
 
-plt.figure(figsize=(8, 6))
-
-# Affichage des points de données
-plt.scatter(X[:, 0], X[:, 1], c='lightgray', s=20, label='Données')
-
-# Affichage de la trajectoire de chaque centre
-K = Mu_hist.shape[1]
-for k in range(K):
-    traj = Mu_hist[:, k, :]
-    plt.plot(traj[:, 0], traj[:, 1], marker='o', label=f'Centre {k+1}')
-    # Flèches entre les positions successives
-    for t in range(len(traj)-1):
-        plt.arrow(traj[t, 0], traj[t, 1],
-                  traj[t+1, 0] - traj[t, 0], traj[t+1, 1] - traj[t, 1],
-                  head_width=0.15, head_length=0.2, fc=f'C{k}', ec=f'C{k}', alpha=0.7, length_includes_head=True)
-
-plt.title("Trajectoire des centres au fil des itérations")
-plt.xlabel("x1")
-plt.ylabel("x2")
-plt.legend()
-plt.show()
-
-# Analyse :
-# On observe généralement que les centres convergent rapidement au début,
-# puis leur déplacement ralentit à mesure qu'ils approchent de la solution finale.
 
 
